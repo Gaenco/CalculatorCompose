@@ -1,170 +1,101 @@
 package com.cortezjoya.calculatorip.ui.calculator
-
-import android.widget.Toast
+import android.R.attr.left
+import android.R.attr.textAlignment
+import android.R.attr.value
+import android.annotation.SuppressLint
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.fontResource
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.net.InetAddress
-import java.net.UnknownHostException
 import kotlin.math.pow
 
-@Preview(showBackground = true)
-@Composable
-fun AppContent() {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            val ipAddressState = remember { mutableStateOf("") }
-            val networkAddressState = remember { mutableStateOf("") }
-            val broadcastAddressState = remember { mutableStateOf("") }
-            val hostsAvailableState = remember { mutableStateOf("") }
 
-            HeaderTitle()
-            IPTextField(ipAddressState)
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            CalculateButton(
-                ipAddress = ipAddressState.value,
-                onCalculate = { calculateIPDetails(ipAddressState.value,
-                    networkAddressState, broadcastAddressState, hostsAvailableState) }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            IPDetails(
-                networkAddress = networkAddressState.value,
-                broadcastAddress = broadcastAddressState.value,
-                hostsAvailable = hostsAvailableState.value
-            )
-        }
-    }
-
-
-@Composable
-fun HeaderTitle(){
-    Text(
-        text = "IP Calculator",
-        Modifier.padding(bottom = 65.dp),
-        color = Color.White,
-        fontSize = 40.sp,
-        fontWeight = FontWeight.Bold,
-        fontFamily = FontFamily.Cursive
-    )
-}
-
+@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun IPTextField(ipAddressState: MutableState<String>) {
-    TextField(
-        value = ipAddressState.value,
-        onValueChange = { ipAddressState.value = it },
-        label = { Text("IP Address") },
-        modifier = Modifier.fillMaxWidth()
+fun MyApp() {
+    var ipText by remember { mutableStateOf(TextFieldValue()) }
+    var maskText by remember { mutableStateOf(TextFieldValue()) }
+    var networkIp by remember { mutableStateOf("") }
+    var broadcastIp by remember { mutableStateOf("") }
+    var hostCount by remember { mutableStateOf(0) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("IP Calculator", fontFamily = FontFamily.Cursive, fontSize = 48.sp) },
+                modifier = Modifier.fillMaxWidth().padding(top = 100.dp).padding(start = 60.dp)
+
+            )
+        },
+
+        content = {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                OutlinedTextField(
+                    value = ipText,
+                    onValueChange = { ipText = it },
+                    label = { Text("IP Address") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = maskText,
+                    onValueChange = { maskText = it },
+                    label = { Text("Subnet Mask") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = {
+                        calculateIP(ipText.text, maskText.text)?.let { (network, broadcast, hosts) ->
+                            networkIp = network
+                            broadcastIp = broadcast
+                            hostCount = hosts
+                        }
+                    }
+                ) {
+                    Text("Calculate")
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text("Network IP: $networkIp")
+                Text("Broadcast IP: $broadcastIp")
+                Text("Hosts Available: $hostCount")
+            }
+        }
     )
 }
 
-@Composable
-fun CalculateButton(
-    ipAddress: String,
-    onCalculate: () -> Unit
-) {
-    val context = LocalContext.current
-
-    Button(
-        onClick = {
-            if (isValidIPAddress(ipAddress)) {
-                onCalculate()
-            } else {
-                Toast.makeText(context, "Invalid IP Address", Toast.LENGTH_SHORT).show()
-            }
-        }
-    ) {
-        Text("Calculate", color = Color.Black)
-    }
-}
-
-@Composable
-fun IPDetails(
-    networkAddress: String,
-    broadcastAddress: String,
-    hostsAvailable: String
-) {
-    Text("Network Address: $networkAddress")
-    Text("Broadcast Address: $broadcastAddress")
-    Text("Hosts Available: $hostsAvailable")
-}
-
-fun isValidIPAddress(ipAddress: String): Boolean {
-    val pattern = """^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$""".toRegex()
-    return pattern.matches(ipAddress)
-}
-
-fun Int.toBinaryString(): String {
-    return Integer.toBinaryString(this).padStart(8, '0')
-}
-
-fun calculateIPDetails(
-    ipAddress: String,
-    networkAddressState: MutableState<String>,
-    broadcastAddressState: MutableState<String>,
-    hostsAvailableState: MutableState<String>
-) {
+fun calculateIP(ip: String, mask: String): Triple<String, String, Int>? {
     try {
-        val inetAddress = InetAddress.getByName(ipAddress)
+        val ipParts = ip.split(".").map { it.toInt() }
+        val maskParts = mask.split(".").map { it.toInt() }
 
-        val subnetMaskArray = inetAddress.hostAddress.split(".")
-        val networkAddressArray = subnetMaskArray.toMutableList()
-        val broadcastAddressArray = subnetMaskArray.toMutableList()
+        val networkParts = ipParts.zip(maskParts) { ipPart, maskPart -> ipPart and maskPart }
+        val networkIp = networkParts.joinToString(".")
 
-        val hostBits = 32 - subnetMaskArray.sumBy { Integer.bitCount(it.toInt()) }
+        val broadcastParts = ipParts.zip(maskParts) { ipPart, maskPart -> ipPart or (maskPart.inv() and 0xFF) }
+        val broadcastIp = broadcastParts.joinToString(".")
 
-        // Conversion de ip y mascara a binario
-        val ipAddressBinary = subnetMaskArray.joinToString("") { it.toInt().toBinaryString() }
-        val subnetMaskBinary = subnetMaskArray.joinToString("") { it.toInt().toBinaryString() }
+        val hostCount = 2.0.pow(32 - maskParts.sumOf { Integer.bitCount(it) }).toInt() - 2
 
-        //  Calculando la ip
-        val networkAddressBinary = ipAddressBinary.zip(subnetMaskBinary) { ipBit, subnetBit ->
-            if (subnetBit == '1') ipBit else '0'
-        }.joinToString("")
-
-        // Calcular el broadcast
-        val broadcastAddressBinary = ipAddressBinary.zip(subnetMaskBinary) { ipBit, subnetBit ->
-            if (subnetBit == '1') ipBit else '1'
-        }.joinToString("")
-
-        // Conversion a decimal
-        val networkAddressValue = networkAddressBinary.chunked(8).map { binary -> Integer.parseInt(binary, 2) }
-        val broadcastAddressValue = broadcastAddressBinary.chunked(8).map { binary -> Integer.parseInt(binary, 2) }
-        val hostsAvailableValue = 2.0.pow(hostBits.toDouble()) - 2
-
-        networkAddressState.value = networkAddressValue.joinToString(".")
-        broadcastAddressState.value = broadcastAddressValue.joinToString(".")
-        hostsAvailableState.value = hostsAvailableValue.toInt().toString()
-    } catch (e: UnknownHostException) {
-        networkAddressState.value = ""
-        broadcastAddressState.value = ""
-        hostsAvailableState.value = ""
+        return Triple(networkIp, broadcastIp, hostCount)
+    } catch (e: Exception) {
+        return null
     }
 }
-
-
